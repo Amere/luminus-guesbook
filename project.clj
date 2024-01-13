@@ -30,17 +30,24 @@
                  [ring-webjars "0.2.0"]
                  [ring/ring-core "1.8.2"]
                  [ring/ring-defaults "0.3.2"]
-                 [selmer "1.12.31"]]
+                 [selmer "1.12.31"]
+                 [com.google.javascript/closure-compiler-unshaded "v20200830" :scope "provided"]
+                 [org.clojure/google-closure-library "0.0-20191016-6ae1f72f":scope "provided"]
+                 [thheller/shadow-cljs "2.11.14" :scope "provided"]
+                 [org.clojure/clojurescript "1.10.764" :scope "provided"]
+                 [cljs-ajax "0.8.1"]
+                 [reagent "1.0.0"]
+                 [re-frame "1.1.2"]]
 
   :min-lein-version "2.0.0"
   
-  :source-paths ["src/clj"]
+  :source-paths ["src/clj" "src/cljs" "src/cljc"]
   :test-paths ["test/clj"]
-  :resource-paths ["resources"]
+  :resource-paths ["resources" "target/cljsbuild"]
   :target-path "target/%s/"
   :main ^:skip-aot guestbook.core
 
-  :plugins [] 
+  :plugins []
 
   :profiles
   {:uberjar {:omit-source true
@@ -56,7 +63,8 @@
                   :dependencies [[pjstadig/humane-test-output "0.10.0"]
                                  [prone "2020-01-17"]
                                  [ring/ring-devel "1.8.2"]
-                                 [ring/ring-mock "0.4.0"]]
+                                 [ring/ring-mock "0.4.0"]
+                                 [binaryage/devtools "1.0.2"]]
                   :plugins      [[com.jakemccrary/lein-test-refresh "0.24.1"]
                                  [jonase/eastwood "0.3.5"]] 
                   
