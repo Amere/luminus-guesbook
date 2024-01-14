@@ -19,6 +19,8 @@
                  [metosin/muuntaja "0.6.7"]
                  [metosin/reitit "0.5.10"]
                  [metosin/ring-http-response "0.9.1"]
+                 ; Lowering the dependency of swagger
+                 [metosin/ring-swagger-ui "2.2.10"]
                  [mount "0.1.16"]
                  [nrepl "0.8.3"]
                  [org.clojure/clojure "1.10.1"]
@@ -36,8 +38,9 @@
                  [thheller/shadow-cljs "2.11.14" :scope "provided"]
                  [org.clojure/clojurescript "1.10.764" :scope "provided"]
                  [cljs-ajax "0.8.1"]
-                 [reagent "1.0.0"]
-                 [re-frame "1.1.2"]]
+                 [reagent "1.2.0"]
+                 [re-frame "1.2.0"]
+                 [borkdude/edamame "1.0.0"]]
 
   :min-lein-version "2.0.0"
   
@@ -64,11 +67,14 @@
                                  [prone "2020-01-17"]
                                  [ring/ring-devel "1.8.2"]
                                  [ring/ring-mock "0.4.0"]
-                                 [binaryage/devtools "1.0.2"]]
+                                 [binaryage/devtools "1.0.2"]
+                                 [day8.re-frame/re-frame-10x "1.6.0"]
+                                 [day8.re-frame/tracing "0.6.2"]]
                   :plugins      [[com.jakemccrary/lein-test-refresh "0.24.1"]
+                                 [cider/cider-nrepl "0.44.0"]
                                  [jonase/eastwood "0.3.5"]] 
                   
-                  :source-paths ["env/dev/clj" ]
+                  :source-paths ["env/dev/clj" "env/dev/cljs" "env/dev/cljc"]
                   :resource-paths ["env/dev/resources"]
                   :repl-options {:init-ns user
                                  :timeout 120000}
