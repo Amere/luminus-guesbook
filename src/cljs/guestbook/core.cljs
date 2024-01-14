@@ -5,6 +5,7 @@
             [clojure.string :as string]
             [ajax.core :refer [GET POST]]
             [guestbook.websockets :as ws]
+            [mount.core :as mount]
             [guestbook.validation :refer [validate-message]]))
 
 ; Initialize app event
@@ -25,7 +26,14 @@
 (rf/reg-event-fx
  :message/send!
  (fn [{:keys [db]} [_ fields]]
-   (ws/send-message! fields)
+   (ws/send!
+    [:message/create! fields]
+    10000
+    (fn [{:keys [success errors] :as response}]
+      (.log js/console "Called Back: " (pr-str response))
+      (if success
+        (rf/dispatch [:form/clear-fields])
+        (rf/dispatch [:form/set-server-errors errors]))))
    {:db (dissoc db :form/server-errors)}))
 
 (defn handle-response! [response]
@@ -197,7 +205,6 @@
 
 (defn init! []
   (.log js/console "Initializing App...")
+  (mount/start)
   (rf/dispatch [:app/initialize])
-  (ws/connect! (str "ws://" (.-host js/location) "/ws")
-               handle-response!)
   (mount-components))

@@ -40,7 +40,8 @@
                  [cljs-ajax "0.8.1"]
                  [reagent "1.2.0"]
                  [re-frame "1.2.0"]
-                 [borkdude/edamame "1.0.0"]]
+                 [borkdude/edamame "1.0.0"]
+                 [com.taoensso/sente "1.16.0"]]
 
   :min-lein-version "2.0.0"
   
