@@ -12,8 +12,165 @@
 (rf/reg-event-fx
  :app/initialize
  (fn [_ _]
-   {:db {:messages/loading? true}
-    :dispatch [:messages/load]}))
+   {:db {:messages/loading? true
+         :session/loading? true}
+    :dispatch-n [[:session/load] [:messages/load]]}))
+
+; Session handling
+(rf/reg-event-fx
+ :session/load
+ (fn [{:keys [db]} _]
+   {:db (assoc db :session/loading? true)
+    :ajax/get {:url "/api/session"
+               :success-path [:session]
+               :success-event [:session/set]}}))
+
+(rf/reg-event-db
+ :session/set
+ (fn [db [_ {:keys [identity]}]]
+   (assoc db
+          :auth/user identity
+          :session/loading? false)))
+
+(rf/reg-sub
+ :session/loading?
+ (fn [db _]
+   (:session/loading? db)))
+
+; Modal events
+(rf/reg-event-db
+ :app/show-modal
+ (fn [db [_ modal-id]]
+   (assoc-in db [:app/active-modals modal-id] true)))
+
+(rf/reg-event-db
+ :app/hide-modal
+ (fn [db [_ modal-id]]
+   (update db :app/active-modals dissoc modal-id)))
+
+(rf/reg-sub
+ :app/active-modals
+ (fn [db _]
+   (:app/active-modals db {})))
+
+(rf/reg-sub
+ :app/modal-showing?
+ :<- [:app/active-modals]
+ (fn [modals [_ modal-id]]
+   (get modals modal-id false)))
+
+(defn modal-card [id title body footer]
+  [:div.modal
+   {:class (when @(rf/subscribe [:app/modal-showing? id]) "is-active")}
+   [:div.modal-background
+    {:on-click #(rf/dispatch [:app/hide-modal id])}]
+   [:div.modal-card
+    [:header.modal-card-head
+     [:p.modal-card-title title]
+     [:button.delete
+      {:on-click #(rf/dispatch [:app/hide-modal id])}]]
+    [:section.modal-card-body
+     body]
+    [:footer.modal-card-foot
+     footer]]])
+
+(defn modal-button [id title body footer]
+  [:div
+   [:button.button.is-primary
+    {:on-click #(rf/dispatch [:app/show-modal id])}
+    title]
+   [modal-card id title body footer]])
+
+
+;; Login logic
+
+(rf/reg-event-db
+ :auth/handle-login
+ (fn [db [_ {:keys [identity]}]]
+   (assoc db :auth/user identity)))
+
+(rf/reg-event-db
+ :auth/handle-logout
+ (fn [db _]
+   (dissoc db :auth/user)))
+
+(rf/reg-sub
+ :auth/user
+ (fn [db _]
+   (:auth/user db)))
+
+(rf/reg-sub
+ :auth/user-state
+ :<-[:auth/user]
+ :<-[:session/loading?]
+ (fn [[user loading?]]
+   (cond
+     (true? loading?) :loading
+     user :authenticated
+     :else :anonymous)))
+
+(defn login-button []
+  (r/with-let
+      [fields (r/atom {})
+       error (r/atom nil)
+       do-login
+       (fn [_]
+         (reset! error nil)
+         (POST "/api/login"
+               {:headers {"Accept" "application/transit+json"}
+                :params @fields
+                :handler (fn [response]
+                           (reset! fields {})
+                           (rf/dispatch [:auth/handle-login response])
+                           (rf/dispatch [:app/hide-modal :user/login]))
+                :error-handler (fn [error-response]
+                                 (reset! error
+                                         (or
+                                          (:message (:response error-response))
+                                          (:status-text error-response)
+                                          "Unknown Error")))}))]
+    [modal-button :user/login
+     ;; Title
+     "Log In"
+     ;; Body
+     [:div
+      (when-not (string/blank? @error)
+        [:div.notification.is-danger
+         @error])
+      [:div.field
+       [:div.label "Login"]
+       [:div.control
+        [:input.input
+         {:type "text"
+          :value (:login @fields)
+          :on-change #(swap! fields assoc :login (.. % -target -value))}]]]
+      [:div.field
+       [:div.label "Password"]
+       [:div.control
+        [:input.input
+         {:type "password"
+          :value (:password @fields)
+          :on-change #(swap! fields assoc :password (.. % -target -value))
+          ;; Submit login form when `Enter` key is pressed
+          :on-key-down #(when (= (.-keyCode %) 13)
+                          (do-login))}]]]]
+     ;; Footer
+     [:button.button.is-primary.is-fullwidth
+      {:on-click do-login
+       :disabled (or (string/blank? (:login @fields))
+                     (string/blank? (:password @fields)))}
+      "Log In"]]))
+
+(defn logout-button []
+  [:button.button
+   {:on-click #(POST "/api/logout"
+                     {:handler (fn [_]
+                                 (rf/dispatch [:auth/handle-logout]))})}
+   "Log Out"])
+
+(defn nameplate [{:keys [login]}]
+  [:button.button.is-primary
+   login])
 
 (rf/reg-fx
  :ajax/get
@@ -29,6 +186,67 @@
           error-event (assoc :error-handler
                              #(rf/dispatch
                                (conj error-event %)))))))
+
+;; Registeration
+(defn register-button []
+  (r/with-let
+      [fields (r/atom {})
+       error (r/atom nil)
+       do-register
+       (fn [_]
+         (reset! error nil)
+         (POST "/api/register"
+               {:headers {"Accept" "application/transit+json"}
+                :params @fields
+                :handler (fn [response]
+                           (reset! fields {})
+                           (rf/dispatch [:app/hide-modal :user/register])
+                           (rf/dispatch [:app/show-modal :user/login]))
+                :error-handler (fn [error-response]
+                                 (reset! error
+                                         (or
+                                          (:message (:response error-response))
+                                          (:status-text error-response)
+                                          "Unknown Error")))}))]
+    [modal-button :user/register
+     ;; Title
+     "Create Account"
+     ;; Body
+     [:div
+      (when-not (string/blank? @error)
+        [:div.notification.is-danger
+         @error])
+      [:div.field
+       [:div.label "Login"]
+       [:div.control
+        [:input.input
+         {:type "text"
+          :value (:login @fields)
+          :on-change #(swap! fields assoc :login (.. % -target -value))}]]]
+      [:div.field
+       [:div.label "Password"]
+       [:div.control
+        [:input.input
+         {:type "password"
+          :value (:password @fields)
+          :on-change #(swap! fields assoc :password (.. % -target -value))}]]]
+      [:div.field
+       [:div.label "Confirm Password"]
+       [:div.control
+        [:input.input
+         {:type "password"
+          :value (:confirm @fields)
+          :on-change #(swap! fields assoc :confirm (.. % -target -value))
+          ;; Submit login form when `Enter` key is pressed
+          :on-key-down #(when (= (.-keyCode %) 13)
+                          (do-register))}]]]]
+     ;; Footer
+     [:button.button.is-primary.is-fullwidth
+      {:on-click do-register
+       :disabled (or (string/blank? (:login @fields))
+                     (string/blank? (:password @fields))
+                     (string/blank? (:confirm @fields)))}
+      "Create Account"]]))
 
 (rf/reg-event-fx
  :messages/load
@@ -53,16 +271,8 @@
                :timeout 10000
                :callback-event [:message/send!-called-back]}}))
 
-(defn handle-response! [response]
-  (if-let [errors (:errors response)]
-    (rf/dispatch [:form/set-server-errors errors])
-    (do
-      (rf/dispatch [:message/add response])
-      (rf/dispatch [:form/clear-fields response]))))
-
-
-; Unwraps the db from the co-effects map, and wraps the return with {:db ...}
-; to be used only with events which use the db effect
+                                        ; Unwraps the db from the co-effects map, and wraps the return with {:db ...}
+                                        ; to be used only with events which use the db effect
 (rf/reg-event-db
  :messages/set
  (fn [db [_ messages]]
@@ -129,7 +339,7 @@
  (fn [errors [_ id]]
    (get errors id)))
 
-; Subscription to the :messages/loading?
+                                        ; Subscription to the :messages/loading?
 (rf/reg-sub
  :messages/loading?
  (fn [db _]
@@ -161,6 +371,36 @@
   (when-let [error @(rf/subscribe [:form/error id])]
     [:div.notification.is-danger (string/join error)]))
 
+(defn text-input [{val :value
+                   attrs :attrs
+                   :keys [on-save]}]
+  (let [draft (r/atom nil)
+        value (r/track #(or @draft @val ""))]
+    (fn []
+      [:input.input
+       (merge attrs
+              {:type :text
+               :on-focus #(reset! draft (or @val ""))
+               :on-blur (fn []
+                          (on-save (or @draft ""))
+                          (reset! draft nil))
+               :on-change #(reset! draft (.. % -target -value))
+               :value @value})])))
+
+(defn textarea-input [{val :value
+                       attrs :attrs
+                       :keys [on-save]}]
+  (let [draft (r/atom nil)
+        value (r/track #(or @draft @val ""))]
+    (fn []
+      [:textarea.textarea
+       (merge attrs
+              {:on-focus #(reset! draft (or @val ""))
+               :on-blur (fn []
+                          (on-save (or @draft ""))
+                          (reset! draft nil))
+               :on-change #(reset! draft (.. % -target -value))
+               :value @value})])))
 
 (defn message-form []
   [:div
@@ -168,24 +408,16 @@
    [:div.field
     [:label.label {:for :name} "Name"]
     [errors-component :name]
-    [:input.input
-     {:type :text
-      :name :name
-      :on-change #(rf/dispatch
-                   [:form/set-field
-                    :name
-                    (.. % -target -value)])
-      :value @(rf/subscribe [:form/field :name])}]]
+    [text-input {:attrs {:name :name}
+                 :value (rf/subscribe [:form/field :name])
+                 :on-save #(rf/dispatch [:form/set-field :name %])}]]
    [:div.field
     [:label.label {:for :message} "Message"]
     [errors-component :message]
-    [:textarea.textarea
-     {:name :message
-      :value @(rf/subscribe [:form/field :message])
-      :on-change #(rf/dispatch
-                   [:form/set-field
-                    :message
-                    (.. % -target -value)])}]]
+    [textarea-input
+     {:attrs {:name :message}
+      :value (rf/subscribe [:form/field :message])
+      :on-save #(rf/dispatch [:form/set-field :message %])}]]
    [:input.button.is-primary
     {:type :submit
      :disabled @(rf/subscribe [:form/validation-errors?])
@@ -214,10 +446,55 @@
        [:div.columns>div.column
         [message-form]]])))
 
+(defn navbar []
+  (let [burger-active (r/atom false)]
+    (fn []
+      [:nav.navbar.is-info
+       [:div.container
+        [:div.navbar-brand
+         [:a.navbar-item
+          {:href "/"
+           :style {:font-weight "bold"}}
+          "guestbook"]
+         [:span.navbar-burger.burger
+          {:data-target "nav-menu"
+           :on-click #(swap! burger-active not)
+           :class (when @burger-active "is-active")}
+          [:span]
+          [:span]
+          [:span]]]
+        [:div#nav-menu.navbar-menu
+         {:class (when @burger-active "is-active")}
+         [:div.navbar-start
+          [:a.navbar-item
+           {:href "/"}
+           "Home"]]
+         [:div.navbar-end
+          [:div.navbar-item
+           (case @(rf/subscribe [:auth/user-state])
+             :loading
+             [:div {:style {:width "5em"}}
+              [:progress.progress.is-dark.is-small {:max 100} "30%"]]
+             :authenticated
+             [:div.buttons
+              [nameplate @(rf/subscribe [:auth/user])]
+              [logout-button]]
+             :anonymous
+             [:div.buttons
+              [login-button]
+              [register-button]])]]]]])))
+
+(defn app []
+  [:div.app
+   [navbar]
+   [:section.section
+    [:div.container
+     [home]]]])
+
 (defn ^:dev/after-load mount-components []
   (rf/clear-subscription-cache!)
   (.log js/console "Mounting Components...")
-  (dom/render [#'home] (.getElementById js/document "content"))
+  (dom/render [#'app] (.getElementById js/document "content"))
   (.log js/console "Components Mounted..."))
 
 (defn init! []
