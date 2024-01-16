@@ -1,8 +1,9 @@
--- :name save-message! :! :n
+-- :name save-message! :<! :1
 -- :doc create a new message using the name and message keys
 INSERT INTO posts
-(name, message)
-VALUES (:name, :message)
+(author, name, message)
+VALUES (:author, :name, :message)
+RETURNING *;
 
 -- :name get-messages :? :*
 -- :doc selects all available messages
@@ -18,3 +19,8 @@ VALUES (:login, :password)
 -- :doc selects a user for authentication
 SELECT * from users
 WHERE login = :login
+
+-- :name get-messages-by-author :? :*
+-- :doc selects all messages posted by a user
+SELECT * from posts
+WHERE author = :author

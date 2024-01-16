@@ -4,7 +4,10 @@
             [guestbook.middleware :as middleware]
             [mount.core :refer [defstate]]
             [taoensso.sente :as sente]
-            [taoensso.sente.server-adapters.http-kit :refer [get-sch-adapter]]))
+            [taoensso.sente.server-adapters.http-kit :refer [get-sch-adapter]]
+            [guestbook.session :as session]
+            [guestbook.auth-z :as auth-z]
+            [guestbook.auth-z.ws :refer [authorized?]]))
 
 (defstate socket
   :start (sente/make-channel-socket!
@@ -17,8 +20,7 @@
   ((:send-fn socket) uid message))
 
 ; Dispatch based on the id of the message
-(defmulti handle-message (fn [{:keys [id]}]
-                           id))
+(defmulti handle-message (fn [{:keys [id]}] id))
 
 (defmethod handle-message :default
   [{:keys [id]}]
@@ -26,12 +28,11 @@
   {:error (str "Unrecognized websocket event type: " (pr-str id))})
 
 (defmethod handle-message :message/create!
-  [{:keys [?data uid] :as message}]
+  [{:keys [?data uid session] :as message}]
   (let [response (try
-                   (msg/save-message! ?data)
-                   (assoc ?data :timestamp (java.util.Date.))
+                   (msg/save-message! (:identity session) ?data)
                    (catch Exception e
-                     (let [{id :guestbook/error-id
+                     (let [{id     :guestbook/error-id
                             errors :errors} (ex-data e)]
                        (case id
                          :validation
@@ -48,11 +49,28 @@
           (send! uid [:message/add response]))
         {:success true}))))
 
-(defn receive-message! [{:keys [id ?reply-fn] :as message}]
-  (log/debug "Got message with id: " id)
-  (let [reply-fn (or ?reply-fn (fn [_]))]
-    (when-some [response (handle-message message)]
-      (reply-fn response))))
+
+(defn receive-message! [{:keys [id ?reply-fn ring-req] :as message}]
+  (case id
+    ;; Apply authorization except for system ones
+    :chsk/bad-package   (log/debug "Bad Package:\n" message)
+    :chsk/bad-event     (log/debug "Bad Event: \n" message)
+    :chsk/uidport-open  (log/trace (:event message))
+    :chsk/uidport-close (log/trace (:event message))
+    :chsk/ws-ping       nil
+    ;; ELSE
+    (let [reply-fn (or ?reply-fn (fn [_]))
+          session  (session/read-session ring-req)
+          message  (-> message
+                      (assoc :session session))]
+      (log/debug "Got message with id: " id)
+      (if (authorized? auth-z/roles message)
+        (when-some [response (handle-message message)]
+          (reply-fn response))
+        (do
+          (log/info "Unauthorized message: " id)
+          (reply-fn {:message "You are not authorized to perform this action"
+                     :errors  {:unauthorized true}}))))))
 
 (defstate channel-router
   :start (sente/start-chsk-router!
@@ -65,5 +83,5 @@
   ["/ws"
    {:middleware [middleware/wrap-csrf
                  middleware/wrap-formats]
-    :get (:ajax-get-or-ws-handshake-fn socket)
-    :post (:ajax-post-fn socket)}])
+    :get        (:ajax-get-or-ws-handshake-fn socket)
+    :post       (:ajax-post-fn socket)}])
