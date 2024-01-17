@@ -19,6 +19,7 @@
                  [metosin/muuntaja "0.6.7"]
                  [metosin/reitit "0.5.10"]
                  [metosin/ring-http-response "0.9.1"]
+                 [metosin/jsonista "0.3.8"]
                  ; Lowering the dependency of swagger
                  [metosin/ring-swagger-ui "2.2.10"]
                  [mount "0.1.16"]

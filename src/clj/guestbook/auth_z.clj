@@ -6,6 +6,8 @@
 
 (def roles
   {:message/create! #{:authenticated}
+   :author/get #{:any}
+   :account/set-profile! #{:authenticated}
    :auth/login #{:any}
    :auth/logout #{:any}
    :auth/register #{:any}

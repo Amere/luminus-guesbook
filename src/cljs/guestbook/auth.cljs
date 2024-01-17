@@ -3,6 +3,7 @@
    [clojure.string :as string]
    [reagent.core :as r]
    [re-frame.core :as rf]
+   [reitit.frontend.easy :as rtfe]
    [guestbook.modals :as m]
    [ajax.core :refer [POST]]))
 
@@ -113,7 +114,9 @@
 
 (defn nameplate [{:keys [login]}]
   [:button.button.is-primary
-   login])
+   [:a
+    {:href (rtfe/href :guestbook.routes.app/profile)}
+   login]])
 
 ;; Registeration
 (defn register-button []

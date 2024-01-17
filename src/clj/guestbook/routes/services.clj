@@ -16,7 +16,8 @@
    [spec-tools.data-spec :as ds]
    [guestbook.auth-z.ring :refer [wrap-authorized get-roles-from-match]]
    [clojure.tools.logging :as log]
-   [guestbook.auth-z :as auth-z]))
+   [guestbook.auth-z :as auth-z]
+   [guestbook.author :as author]))
 
 (defn service-routes []
   ["/api"
@@ -59,7 +60,7 @@
     :coercion   spec-coercion/coercion
     :swagger    {:id ::api}}
    ["" {:no-doc      true
-        ::auth/roles (auth-z/roles :swagger/swagger)}
+        ::auth-z/roles (auth-z/roles :swagger/swagger)}
     ["/swagger.json"
      {:get (swagger/create-swagger-handler)}]
     ["/swagger-ui*"
@@ -151,6 +152,43 @@
                        (->
                         (response/ok)
                         (assoc :session nil)))}}]
+   ["/author/:login"
+    {::auth-z/roles (auth-z/roles :author/get)
+     :get {:parameters
+           {:path {:login string?}}
+           :responses
+           {200
+            {:body map?}
+            500
+            {:errors map?}}
+           :handler
+           (fn [{{{:keys [login]} :path} :parameters}]
+             (response/ok (author/get-author login)))}}]
+   ["/my-account"
+    ["/set-profile"
+     {::auth-z/roles (auth-z/roles :account/set-profile!)
+      :post {:parameters
+             {:body
+              {:profile map?}}
+             :responses
+             {200
+              {:body map?}
+              500
+              {:errors map?}}
+             :handler
+             (fn [{{{:keys [profile]} :body} :parameters
+                   {:keys [identity] :as session} :session}]
+               (try
+                 (let [identity
+                       (author/set-author-profile (:login identity) profile)]
+                   (update (response/ok {:success true})
+                           :session
+                           assoc :identity identity))
+                 (catch Exception e
+                   (log/error e)
+                   (response/internal-server-error
+                    {:errors {:server-error
+                              ["Failed to set profile!"]}}))))}}]]
    ["/messages"
     {::auth-z/roles (auth-z/roles :messages/list)}
     ["" {:get

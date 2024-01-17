@@ -3,7 +3,8 @@
    #?@(:clj [[guestbook.layout :as layout]
              [guestbook.middleware :as middleware]]
        :cljs [[guestbook.views.home :as home]
-              [guestbook.views.author :as author]])))
+              [guestbook.views.author :as author]
+              [guestbook.views.profile :as profile]])))
 
 #?(:clj
    (defn home-page [request]
@@ -25,4 +26,10 @@
     (merge
      {:name ::author}
      #?(:cljs {:view #'author/author
-               :controllers author/author-controllers}))]])
+               :controllers author/author-controllers}))]
+   ["/my-account/edit-profile"
+    (merge
+     {:name ::profile}
+     #?(:cljs
+        {:controllers profile/profile-controllers
+         :view #'profile/profile}))]])

@@ -122,4 +122,3 @@
   ;; so it doesn't collide with load-messages-for-user if we refresh the page of a user
   (rf/dispatch-sync [:app/initialize])
   (mount-components))
-
